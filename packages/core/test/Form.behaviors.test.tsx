@@ -10,7 +10,7 @@ import type {
 } from '@rjsf/utils';
 import { bracketNameGenerator, buttonId, dotNotationNameGenerator, optionalControlsId, toFieldPath } from '@rjsf/utils';
 import validator from '@rjsf/validator-ajv8';
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 
 import type { FormProps, IChangeEvent } from '../src/index.ts';
@@ -25,6 +25,7 @@ import {
   errorListMessages,
   expectToHaveBeenCalledWithFormData,
   fieldErrorsById,
+  input,
   setupConsoleErrorSuppression,
   submitForm,
 } from './testUtils.tsx';
@@ -473,12 +474,12 @@ describe('Error state consistency when deriving from new props', () => {
   it("keeps a field's raise over a validator error when the parent echoes the edit (#5347)", async () => {
     const { container } = render(<EchoingParent widgets={errorRaisingWidgets} />);
 
-    await submitForm(container.querySelector('form')!, user);
+    await submitForm(container, user);
     expect(fieldErrorsById(container)).toEqual({ root_name: ['must NOT have fewer than 8 characters'] });
 
-    await user.type(container.querySelector<HTMLInputElement>('#root_name')!, 'x');
+    await user.type(input(container, 'root_name'), 'x');
 
-    expect(container.querySelector<HTMLInputElement>('#root_name')!).toHaveValue('shortx');
+    expect(input(container, 'root_name')).toHaveValue('shortx');
     expect(fieldErrorsById(container)).toEqual({ root_name: ['custom:shortx'] });
     expect(errorListMessages(container)).toEqual(['.name custom:shortx']);
   });
@@ -492,13 +493,13 @@ describe('Error state consistency when deriving from new props', () => {
       const { container } = render(<RestylingParent />);
 
       act(() => rootField().onChange('short', nameStreetPath, { __errors: ['name own'] }));
-      await submitForm(container.querySelector('form')!, user);
+      await submitForm(container, user);
       expect(fieldErrorsById(container)).toEqual({
         root_name: ['must NOT have fewer than 8 characters', 'name own'],
       });
 
       act(() => rootField().onChange('short', nameStreetPath, cleared));
-      await user.click(container.querySelector('button')!);
+      await user.click(screen.getByRole('button', { name: 'restyle' }));
 
       expect(fieldErrorsById(container)).toEqual({});
       expect(errorListMessages(container)).toEqual([]);
@@ -510,11 +511,11 @@ describe('Error state consistency when deriving from new props', () => {
       <Form schema={schema} validator={validator} widgets={errorRaisingWidgets} initialFormData={shortName} />,
     );
 
-    await submitForm(container.querySelector('form')!, user);
-    await user.type(container.querySelector<HTMLInputElement>('#root_name')!, 'y');
+    await submitForm(container, user);
+    await user.type(input(container, 'root_name'), 'y');
     expect(errorListMessages(container)).toEqual(['.name custom:shorty']);
 
-    await submitForm(container.querySelector('form')!, user);
+    await submitForm(container, user);
 
     expect(fieldErrorsById(container)).toEqual({
       root_name: ['must NOT have fewer than 8 characters', 'custom:shorty'],
@@ -540,7 +541,7 @@ describe('Error state consistency when deriving from new props', () => {
     );
 
     act(() => rootField().onChange(undefined, toFieldPath('other'), {}));
-    await submitForm(container.querySelector('form')!, user);
+    await submitForm(container, user);
 
     expect(onError).toHaveBeenLastCalledWith([expect.objectContaining({ property: '.name', name: 'minLength' })]);
   });
