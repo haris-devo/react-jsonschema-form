@@ -459,34 +459,21 @@ function withErrorSchemaAt<T>(errorSchema: ErrorSchema<T>, path: FieldPathList, 
   return replaced;
 }
 
-/** The index of the item of the array at `path` that `pathOfError` sits in, if it sits in one */
-function itemIndexAt(path: FieldPathList, pathOfError: FieldPathList): number | undefined {
-  const index = Number(pathOfError[path.length]);
-  return isPathPrefix(path, pathOfError) && Number.isInteger(index) ? index : undefined;
-}
-
 /** `validation` after the items of the array at `path` moved: each item's errors sit at the item's new index, those of
  * a removed item are gone, and the array's own, such as `minItems`, belong to no item and stay
  *
  * @param validation - The errors, as a list and as an `ErrorSchema`
  * @param path - The path of the array
  * @param newIndexOf - Where each item went
- * @returns - The errors for the moved items, `validation` itself when it holds none for the array's items
+ * @returns - The errors for the moved items
  */
 function withItemsMoved<T>(
   validation: ValidationData<T>,
   path: FieldPathList,
   newIndexOf: ItemMove,
 ): ValidationData<T> {
-  const items = getAt<ErrorSchema<T> | undefined>(validation.errorSchema, path) ?? {};
-  if (
-    !Object.keys(items).some((key) => key !== ERRORS_KEY) &&
-    !validation.errors.some((error) => itemIndexAt(path, errorPath(error)) !== undefined)
-  ) {
-    return validation;
-  }
   const moved: GenericObjectType = {};
-  for (const [key, node] of Object.entries(items)) {
+  for (const [key, node] of Object.entries(getAt<ErrorSchema<T> | undefined>(validation.errorSchema, path) ?? {})) {
     const newKey = key === ERRORS_KEY ? key : newIndexOf(Number(key));
     if (newKey !== undefined) {
       moved[newKey] = node;
@@ -494,8 +481,8 @@ function withItemsMoved<T>(
   }
   const errors = validation.errors.flatMap((error) => {
     const pathOfError = errorPath(error);
-    const index = itemIndexAt(path, pathOfError);
-    if (index === undefined) {
+    const index = Number(pathOfError[path.length]);
+    if (!isPathPrefix(path, pathOfError) || !Number.isInteger(index)) {
       return [error];
     }
     const newIndex = newIndexOf(index);
@@ -1114,26 +1101,14 @@ export function applyChange<T, S extends StrictRJSFSchema, F extends FormContext
   if (newIndexOf) {
     validation = withItemsMoved(validation, path, newIndexOf);
     if (customErrors) {
-      const { errorSchema: ownMoved } = withItemsMoved(
-        { errors: [], errorSchema: customErrors.ErrorSchema },
-        path,
-        newIndexOf,
-      );
-      if (ownMoved !== customErrors.ErrorSchema) {
-        customErrors = new ErrorSchemaBuilder<T>(ownMoved);
-      }
+      const own = withItemsMoved({ errors: [], errorSchema: customErrors.ErrorSchema }, path, newIndexOf);
+      customErrors = new ErrorSchemaBuilder<T>(own.errorSchema);
     }
   }
   let clearedCustomError = false;
   if (newErrorSchema) {
     // The raise is the field's say over its path, so the validator's errors there are gone until it validates again
-    const reported = getAt<ErrorSchema<T> | undefined>(validation.errorSchema, path);
-    if (
-      (reported && Object.keys(reported).length > 0) ||
-      validation.errors.some((error) => isPathPrefix(path, errorPath(error)))
-    ) {
-      validation = withoutErrors(validation, (pathOfError) => isPathPrefix(path, pathOfError));
-    }
+    validation = withoutErrors(validation, (pathOfError) => isPathPrefix(path, pathOfError));
     // The field's own errors are kept apart from the validator's, which the next validation and a parent replacing
     // the data both rewrite, so the raise outlives either until the field raises again (#5347). It replaces the
     // field's earlier raise at this path, an empty one included. With neither there is nothing to keep: an empty
