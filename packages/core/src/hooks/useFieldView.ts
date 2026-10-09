@@ -43,7 +43,7 @@ export default function useFieldView<V>(fieldPath: FieldPath, value: V, self: un
        * `newIndexOf` says where the proposal put each item of the field's array, for the form to move their errors
        * along. The indexes are those of the `formData` the field was given, which a custom parent passing the form's
        * data on leaves as they are; one that reorders or filters the items it shows moves the errors by its own
-       * indexes, as it would have had to remap an `ErrorSchema` the field handed back.
+       * indexes.
        */
       propose: (next: V, send: () => void, newIndexOf?: ItemMove) => {
         const record = access && { view: next, epoch: access.epoch() };

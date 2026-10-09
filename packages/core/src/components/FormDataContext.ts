@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import type { FieldPath } from '@rjsf/utils';
 
-import type { ItemMove } from './formState.ts';
+import type { AnnouncedMove } from './formState.ts';
 
 /** Private event access for container fields. A field rendered with the form's own data reads the form's latest edit,
  * which in a parent-owned form is a proposal made since the form last rendered; a field handed a view of that data
@@ -21,7 +21,7 @@ interface FormDataAccess {
    * holds for them along, when the change for that path reaches it before the proposal was sent. Only the form holds
    * them all, and a field's `onChange` has no way to say where an item went.
    */
-  proposing(move?: { fieldPath: FieldPath; newIndexOf: ItemMove }): () => void;
+  proposing(move?: AnnouncedMove): () => void;
   /** The latest data at `path`, for a field that renders the form's own data there (see `RawFormDataContext`) */
   readField<D>(path: FieldPath): D;
 }

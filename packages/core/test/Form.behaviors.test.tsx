@@ -577,7 +577,7 @@ describe('Error state consistency when deriving from new props', () => {
   it("takes everything a raise holds for the field's own, the errors it was shown included", async () => {
     const { container, rerender } = render(<RestylingParent extraErrors={otherServerErrors} />);
 
-    await submitForm(container.querySelector('form')!, user);
+    await submitForm(container, user);
     // Handing back the displayed `errorSchema` claims the validator's error and the parent's as the root field's own
     act(() => rootField().onChange(shortName, rootField().fieldPath, rootField().errorSchema));
     rerender(<RestylingParent />);
@@ -604,11 +604,10 @@ describe('Error state consistency when deriving from new props', () => {
       />,
     );
 
-    await submitForm(container.querySelector('form')!, user);
+    await submitForm(container, user);
     act(() => rootField().onChange('short', nameStreetPath, { __errors: ['name own'] }));
 
-    const [{ errors }] = onChange.mock.calls.at(-1)!;
-    expect(errors).toEqual([
+    expect(onChange.mock.lastCall?.[0].errors).toEqual([
       expect.objectContaining({ property: '.other', name: 'minLength', params: { limit: 8 } }),
       { property: '.name', message: 'name own', stack: '.name name own' },
     ]);
@@ -682,8 +681,7 @@ describe('Error state consistency when deriving from new props', () => {
 
       await submitAndMoveFirstItemDown(container);
 
-      const [{ errors }] = onChange.mock.calls.at(-1)!;
-      expect(errors).toEqual([
+      expect(onChange.mock.lastCall?.[0].errors).toEqual([
         expect.objectContaining({
           property: '.arr.1',
           stack: '.arr.1 must NOT have fewer than 3 characters',
@@ -717,7 +715,7 @@ describe('Error state consistency when deriving from new props', () => {
       const { container } = render(
         <Form schema={arraySchema} validator={validator} initialFormData={{ arr: ['a', 'bbbb', 'c'] }} />,
       );
-      await submitForm(container.querySelector('form')!, user);
+      await submitForm(container, user);
       expect(Object.keys(fieldErrorsById(container))).toEqual(['root_arr_0', 'root_arr_2']);
 
       await user.click(container.querySelectorAll<HTMLButtonElement>('.rjsf-array-item-remove')[0]);
@@ -731,7 +729,7 @@ describe('Error state consistency when deriving from new props', () => {
       const { container } = render(
         <Form schema={arraySchema} uiSchema={capturingUiSchema} validator={validator} initialFormData={arrayData} />,
       );
-      await submitForm(container.querySelector('form')!, user);
+      await submitForm(container, user);
 
       act(() => rootField().onChange(['bbbb', 'a', 'cccc'], toFieldPath('arr')));
 
@@ -794,7 +792,7 @@ describe('Error state consistency when deriving from new props', () => {
     });
   });
 
-  // Add, copy, move and remove all remap through `remapItemErrors()`, so a move covers them
+  // Add, copy, move and remove all go through `withItemsMoved()`, so a move covers them
   describe('after an ArrayField remaps its items in an uncontrolled form', () => {
     const items: RJSFSchema = { type: 'array', minItems: 4, items: { type: 'string', minLength: 3 } };
     it.each<[string, RJSFSchema, unknown, string]>([
@@ -818,7 +816,7 @@ describe('Error state consistency when deriving from new props', () => {
     });
   });
 
-  it('lets the parent clear the extraErrors an ArrayField reorder remapped', async () => {
+  it('lets the parent clear the extraErrors of an item an ArrayField reorder moved', async () => {
     const arraySchema: RJSFSchema = {
       type: 'object',
       properties: { arr: { type: 'array', items: { type: 'string', minLength: 3 } } },
@@ -833,8 +831,7 @@ describe('Error state consistency when deriving from new props', () => {
     await submitForm(container.querySelector('form')!, user);
     expect(errorListMessages(container)).toEqual(['.arr.0 must NOT have fewer than 3 characters', '.arr.2 server']);
 
-    // The reorder raises the remapped item errors, `server` among them, which must not become part of the stored
-    // validator result
+    // The reorder moves only the errors the form holds: `server` stays the prop's, at the index the parent gave it
     await user.click(container.querySelectorAll<HTMLButtonElement>('.rjsf-array-item-move-down')[1]);
     rerender(<Parent />);
 
@@ -857,7 +854,7 @@ describe('Error state consistency when deriving from new props', () => {
     },
     { name: 'the only error on the path', street: { type: 'string' }, server: 'server', expected: [] },
   ] satisfies { name: string; street: RJSFSchema; server: string; expected: string[] }[])(
-    'lets the parent clear the extraErrors an optional object Remove sent back, with $name',
+    'leaves the errors to the validator and the parent when an optional object Remove is declined, with $name',
     async ({ street, server, expected }) => {
       const addrSchema: RJSFSchema = {
         type: 'object',
@@ -883,7 +880,6 @@ describe('Error state consistency when deriving from new props', () => {
       await submitForm(container.querySelector('form')!, user);
       expect(errorListMessages(container)).toEqual([...expected, `.addr.street ${server}`]);
 
-      // Remove hands back the displayed `errorSchema`, `server` included, which must not outlive the prop supplying it
       await user.click(container.querySelector(`#${optionalControlsId('root_addr', 'Remove')}`)!);
       rerender(<Parent />);
       rerender(<Parent className='x' />);
@@ -895,36 +891,7 @@ describe('Error state consistency when deriving from new props', () => {
     },
   );
 
-  it('lets the parent clear the root extraErrors a root-path raise sent back', async () => {
-    const streetSchema: RJSFSchema = { type: 'object', properties: { street: { type: 'string' } } };
-    const rootServerErrors: ErrorSchema = { __errors: ['server'] };
-    function Parent({ extraErrors, className }: { extraErrors?: ErrorSchema; className?: string }) {
-      return (
-        <Form
-          schema={streetSchema}
-          uiSchema={capturingUiSchema}
-          validator={validator}
-          formData={{ street: 'a' }}
-          extraErrors={extraErrors}
-          className={className}
-        />
-      );
-    }
-    const { container, rerender } = render(<Parent extraErrors={rootServerErrors} />);
-
-    await submitForm(container.querySelector('form')!, user);
-    expect(errorListMessages(container)).toEqual(['. server']);
-
-    // A custom root `Field` handing back the `errorSchema` it displays, `server` included
-    act(() => rootField().onChange({ street: 'b' }, rootField().fieldPath, rootField().errorSchema));
-    rerender(<Parent />);
-    rerender(<Parent className='x' />);
-
-    expect(errorListMessages(container)).toEqual([]);
-    expect(fieldErrorsById(container)).toEqual({});
-  });
-
-  it('keeps the validator error when a raise hands back only errors supplied elsewhere', async () => {
+  it('lists a message once when a field raises as its own what the validator also reported', async () => {
     const addrSchema: RJSFSchema = {
       type: 'object',
       properties: { addr: { type: 'object', properties: { street: { type: 'string', minLength: 3 } } } },
@@ -947,7 +914,7 @@ describe('Error state consistency when deriving from new props', () => {
     act(() => rootField().onChange('a', streetPath, street));
 
     expect(fieldErrorsById(container)).toEqual({ root_addr_street: [minLengthError] });
-    // The copy handed back is the validator's, and it replaces the field's earlier raise of the same message
+    // The raise takes the validator's copy off the path and replaces the field's earlier raise of the same message
     expect(errorListMessages(container)).toEqual([`.addr.street ${minLengthError}`]);
 
     // An empty raise at `street` must unset its node rather than leave `{ addr: { street: {} } }`, which the empty

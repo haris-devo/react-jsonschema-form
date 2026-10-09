@@ -18,7 +18,7 @@ import {
 
 import type { FormProps, FormState } from './Form.tsx';
 import type { FormRef } from './FormRef.ts';
-import type { ItemMove, PendingChange } from './formState.ts';
+import type { AnnouncedMove, PendingChange } from './formState.ts';
 import {
   applyBlur,
   applyChange,
@@ -217,7 +217,7 @@ export function createFormModel<T, S extends StrictRJSFSchema, F extends FormCon
   let pending: FormState<T, S, F> | undefined;
   let epoch = 0;
   // The item move an `ArrayField` announced for the change it is sending, see `FormDataAccess.proposing()`
-  let moving: { fieldPath: FieldPath; newIndexOf: ItemMove } | undefined;
+  let moving: AnnouncedMove | undefined;
   const propose = (next: FormState<T, S, F>) => {
     // `commit()` freezes self-owned data; a proposal never reaches it
     if (isDevelopment) {
@@ -553,13 +553,13 @@ export function createFormModel<T, S extends StrictRJSFSchema, F extends FormCon
      * proposal had the form render already: one that reached the form, as an operation or as a proposal of its own,
      * made a new `snapshot`
      */
-    proposing: (move?: { fieldPath: FieldPath; newIndexOf: ItemMove }) => {
+    proposing: (move?: AnnouncedMove) => {
       const before = snapshot;
       if (move) {
         moving = move;
       }
       return () => {
-        if (move && moving === move) {
+        if (moving === move) {
           moving = undefined;
         }
         if (snapshot === before) {
